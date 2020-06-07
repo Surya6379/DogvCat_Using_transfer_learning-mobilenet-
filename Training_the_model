@@ -1,0 +1,119 @@
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import AveragePooling2D
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.keras.utils import to_categorical
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from imutils import paths
+import matplotlib.pyplot as plt
+import numpy as np
+import argparse
+import os
+
+def prep(data_folder_path):
+    dirs = os.listdir(data_folder_path)
+    
+    images = []
+    labels = []
+  
+    for dir_name in dirs:
+        print(dir_name)
+  
+            
+        if dir_name=='Cats':
+
+          label = 0
+          
+        elif dir_name=='Dogs':
+          label= 1
+        
+        
+        subject_dir_path = data_folder_path + "/" + dir_name
+        
+        
+        subject_images_names = os.listdir(subject_dir_path)
+      
+        for image_name in subject_images_names:
+           
+            if image_name.startswith("."):
+                continue;
+            
+           
+            image_path = subject_dir_path + "/" + image_name
+            
+
+            
+            
+           
+            images.append( image_path)            
+            labels.append(label)
+            
+            
+        return images,labels
+    
+  images , labels = prep("/content/drive/My Drive/train")
+  tl = len(images)
+data = []
+c=0
+for path in images:
+  img = load_img(path,target_size=(224,224))
+  img = img_to_array(img)
+  img = preprocess_input(img)
+  data.append(img)
+  c+=1
+  print(c)
+data = np.array(data,dtype="float32")
+labels = np.array(labels)
+lb = LabelBinarizer()
+labels = lb.fit_transform(labels)
+labels = to_categorical(labels)
+(trainX, testX, trainY, testY) = train_test_split(data, labels,
+	test_size=0.20, stratify=labels, random_state=42)
+aug = ImageDataGenerator(
+	rotation_range=20,
+	zoom_range=0.15,
+	width_shift_range=0.2,
+	height_shift_range=0.2,
+	shear_range=0.15,
+	horizontal_flip=True,
+	fill_mode="nearest")
+ baseModel = MobileNetV2(weights="imagenet", include_top=False,
+	input_tensor=Input(shape=(224, 224, 3)))
+headModel = baseModel.output
+headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
+headModel = Flatten(name="flatten")(headModel)
+headModel = Dense(128, activation="relu")(headModel)
+headModel = Dropout(0.5)(headModel)
+headModel = Dense(2, activation="softmax")(headModel)
+model = Model(inputs=baseModel.input, outputs=headModel)
+for layer in baseModel.layers:
+	layer.trainable = False
+INIT_LR = 1e-4
+EPOCHS = 10
+BS = 32
+
+opt = Adam(lr=INIT_LR,decay=INIT_LR/EPOCHS)
+model.compile(optimizer=opt,loss="binary_crossentropy",metrics=["accuracy"])
+H = model.fit(
+    aug.flow(trainX,trainY),
+    steps_per_epoch=len(trainX)//BS,
+    validation_data=(trainX,trainY),
+    validation_steps=len(testX)//BS,epochs=EPOCHS)
+    
+clas = ['cat','dog']
+ind = 15
+print(clas[np.argmax(pred[ind])])
+plt.imshow(testX[ind])
+
+
+ 
